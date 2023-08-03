@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"log"
+
+	"github.com/tealeg/xlsx"
 )
 
 type Row struct {
@@ -19,7 +22,14 @@ type Row struct {
 
 func main() {
 	directoryPath := "files"
-	fileRowsMap, err := processDirectory(directoryPath)
+	csvFilesDirectoryPath := "csvFiles"
+
+	err := convertXLSXToCSV(directoryPath, csvFilesDirectoryPath)
+	if err != nil {
+		fmt.Printf("Error converting XLSX to CSV: %s\n", err)
+	}
+
+	fileRowsMap, err := processDirectory(csvFilesDirectoryPath)
 	if err != nil {
 		panic(err)
 	}
@@ -250,3 +260,42 @@ func writeMergedDataToCSV(mergedData [][]string, filePath string) error {
 
 	return nil
 }
+
+func convertXLSXToCSV(inputDir, outputDir string) error {
+	files, err := ioutil.ReadDir(inputDir)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".xlsx") {
+			xlsxFile, err := xlsx.OpenFile(filepath.Join(inputDir, file.Name()))
+			if err != nil {
+				log.Printf("Error opening XLSX file: %s\n", err)
+				continue
+			}
+
+			for _, sheet := range xlsxFile.Sheets {
+				csvFileName := strings.TrimSuffix(file.Name(), ".xlsx") + "_" + sheet.Name + ".csv"
+				csvFile, err := os.Create(filepath.Join(outputDir, csvFileName))
+				if err != nil {
+					log.Printf("Error creating CSV file: %s\n", err)
+					continue
+				}
+
+				for _, row := range sheet.Rows {
+					var csvRow []string
+					for _, cell := range row.Cells {
+						csvRow = append(csvRow, cell.String())
+					}
+					_, err := csvFile.WriteString(strings.Join(csvRow, ",") + "\n")
+					if err != nil {
+						log.Printf("Error writing to CSV file: %s\n", err)
+						continue
+					}
+				}
+
+				csvFile.Close()
+			}
+		}
+	}
